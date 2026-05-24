@@ -1,0 +1,128 @@
+@inject ChatStateService ChatState
+@inject BrowserNotificationService BrowserNotifications
+
+@if (IsOpen)
+{
+    <div class="fixed inset-0 z-40 bg-slate-950/60" @onclick="OnClose"></div>
+}
+
+<div class="@ModalClasses">
+    <div class="glass-panel w-[360px] max-w-[90vw] rounded-3xl p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <div class="text-lg font-semibold">Settings</div>
+                <div class="text-xs text-muted">Personalize your experience</div>
+            </div>
+            <button class="glass-subtle flex h-9 w-9 items-center justify-center rounded-xl text-white/80"
+                    @onclick="OnClose" aria-label="Close settings">
+                @((MarkupString)Icons.Close)
+            </button>
+        </div>
+
+        <div class="mt-6 space-y-4">
+            <div class="space-y-2">
+                <div class="text-xs font-semibold text-muted">Theme</div>
+                <div class="grid grid-cols-3 gap-2">
+                    @foreach (var option in ThemeOptions)
+                    {
+                        <label class="glass-subtle flex cursor-pointer flex-col gap-1 rounded-2xl px-3 py-2 text-xs">
+                            <input type="radio" name="theme" value="@option" checked="@(option == _theme)" @onchange="() => UpdateTheme(option)" />
+                            <span class="font-semibold">@option</span>
+                        </label>
+                    }
+                </div>
+            </div>
+
+            <div class="glass-subtle flex items-center justify-between rounded-2xl px-4 py-3 text-sm">
+                <div>
+                    <div class="font-semibold">Reduce motion</div>
+                    <div class="text-xs text-muted">Minimize animations</div>
+                </div>
+                <input type="checkbox" checked="@_reduceMotion" @onchange="ToggleMotion" />
+            </div>
+
+            <div class="glass-subtle space-y-2 rounded-2xl px-4 py-3 text-sm">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="font-semibold">Browser notifications</div>
+                        <div class="text-xs text-muted">Show native alerts for new messages</div>
+                    </div>
+                    <span class="text-[11px] text-muted">@_notificationPermission</span>
+                </div>
+                <button class="rounded-2xl bg-emerald-400 px-3 py-2 text-[11px] font-semibold text-slate-950"
+                        @onclick="RequestNotificationPermission">
+                    Enable notifications
+                </button>
+            </div>
+        </div>
+
+        <button class="mt-6 w-full rounded-2xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950"
+                @onclick="OnClose">
+            Done
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private ThemePreference _theme;
+    private bool _reduceMotion;
+    private string _notificationPermission = "unknown";
+
+    private IEnumerable<ThemePreference> ThemeOptions => Enum.GetValues<ThemePreference>();
+
+    private string ModalClasses =>
+        $"fixed inset-0 z-50 flex items-center justify-center transition" +
+        (IsOpen ? " opacity-100" : " pointer-events-none opacity-0");
+
+    protected override void OnParametersSet()
+    {
+        _theme = ChatState.Preferences.Theme;
+        _reduceMotion = ChatState.Preferences.ReduceMotion;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (IsOpen)
+        {
+            _notificationPermission = await BrowserNotifications.GetPermissionAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task UpdateTheme(ThemePreference theme)
+    {
+        _theme = theme;
+        await ApplyAsync();
+    }
+
+    private async Task ToggleMotion(ChangeEventArgs args)
+    {
+        _reduceMotion = args.Value is true or "true";
+        await ApplyAsync();
+    }
+
+    private async Task ApplyAsync()
+    {
+        var preferences = new UserPreferences
+        {
+            Theme = _theme,
+            ReduceMotion = _reduceMotion
+        };
+
+        await ChatState.SetPreferencesAsync(preferences);
+    }
+
+    private async Task RequestNotificationPermission()
+    {
+        _notificationPermission = await BrowserNotifications.RequestPermissionAsync();
+        StateHasChanged();
+    }
+
+    private static class Icons
+    {
+        public const string Close = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' width='18' height='18'><path d='M18 6 6 18'/><path d='M6 6l12 12'/></svg>";
+    }
+}

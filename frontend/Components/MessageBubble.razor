@@ -1,0 +1,34 @@
+@using System.Globalization
+
+<div class="flex @Alignment">
+    @if (!Message.IsMine && ShowHeader)
+    {
+        <div class="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400/20 text-xs font-semibold text-emerald-200">
+            @Message.SenderName[..1]
+        </div>
+    }
+    else if (!Message.IsMine)
+    {
+        <div class="w-9"></div>
+    }
+
+    <div class="max-w-[78%] space-y-1">
+        @if (ShowHeader)
+        {
+            <div class="text-xs text-muted">
+                <span class="font-semibold text-white/90">@Message.SenderName</span>
+                <span class="ml-2">@Message.Timestamp.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture)</span>
+            </div>
+        }
+        <div class="@(Message.IsMine ? "bg-emerald-400/20 text-emerald-50" : "glass-subtle text-white/90") rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-glow">
+            @Message.Content
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public required ChatMessage Message { get; set; }
+    [Parameter] public bool ShowHeader { get; set; }
+
+    private string Alignment => Message.IsMine ? "justify-end" : "justify-start gap-3";
+}

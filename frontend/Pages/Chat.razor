@@ -1,0 +1,31 @@
+@page "/"
+@implements IDisposable
+@inject ChatStateService ChatState
+
+<PageTitle>RealTimeBuzz</PageTitle>
+
+<section class="flex h-full min-h-0 flex-col gap-4">
+    <ChatHeader />
+
+    <div class="flex min-h-0 flex-1 flex-col">
+        <MessageList />
+        <Composer />
+    </div>
+</section>
+
+@code {
+    protected override void OnInitialized()
+    {
+        ChatState.OnChange += HandleStateChanged;
+    }
+
+    public void Dispose()
+    {
+        ChatState.OnChange -= HandleStateChanged;
+    }
+
+    private void HandleStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+}

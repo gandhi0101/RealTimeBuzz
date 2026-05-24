@@ -1,0 +1,137 @@
+@implements IDisposable
+@inject ChatStateService ChatState
+@inject IJSRuntime JS
+
+<div class="relative flex min-h-0 flex-1">
+    <div class="rtb-scroll flex h-full w-full flex-col gap-4 overflow-y-auto pr-2" @ref="_scrollRef" @onscroll="HandleScroll">
+        @if (!string.IsNullOrWhiteSpace(ChatState.ErrorMessage))
+        {
+            <div class="rounded-2xl border border-rose-200/30 bg-rose-200/10 px-4 py-3 text-sm text-rose-100">
+                @ChatState.ErrorMessage
+            </div>
+        }
+
+        @if (ChatState.IsLoading)
+        {
+            <div class="space-y-4 py-6">
+                @for (var i = 0; i < 6; i++)
+                {
+                    <div class="flex gap-3">
+                        <div class="skeleton h-10 w-10 rounded-full"></div>
+                        <div class="flex-1 space-y-2">
+                            <div class="skeleton h-4 w-32 rounded-full"></div>
+                            <div class="skeleton h-12 w-full rounded-2xl"></div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else if (ChatState.SelectedRoom is null)
+        {
+            <div class="flex h-full flex-col items-center justify-center text-center text-sm text-muted">
+                <div class="text-lg font-semibold text-white/90">Choose a contact</div>
+                <div class="max-w-sm">Pick a person or group to see the conversation timeline.</div>
+            </div>
+        }
+        else if (ChatState.CurrentMessages.Count == 0)
+        {
+            <div class="flex h-full flex-col items-center justify-center text-center text-sm text-muted">
+                <div class="text-lg font-semibold text-white/90">No messages yet</div>
+                <div class="max-w-sm">Start the conversation and break the silence.</div>
+            </div>
+        }
+        else
+        {
+            <div class="space-y-4 py-4">
+                @for (var i = 0; i < ChatState.CurrentMessages.Count; i++)
+                {
+                    var message = ChatState.CurrentMessages[i];
+                    var previous = i > 0 ? ChatState.CurrentMessages[i - 1] : null;
+                    var showHeader = previous is null
+                        || previous.SenderId != message.SenderId
+                        || message.Timestamp - previous.Timestamp > TimeSpan.FromMinutes(12);
+
+                    <MessageBubble Message="message" ShowHeader="showHeader" />
+                }
+            </div>
+        }
+    </div>
+
+    @if (_showJumpToLatest)
+    {
+        <button class="glass-panel absolute bottom-4 right-4 flex items-center gap-2 rounded-full px-4 py-2 text-xs"
+                @onclick="JumpToLatest">
+            @((MarkupString)Icons.ArrowDown)
+            Jump to latest
+        </button>
+    }
+</div>
+
+@code {
+    private ElementReference _scrollRef;
+    private int _lastMessageCount;
+    private string? _lastRoomId;
+    private bool _showJumpToLatest;
+
+    protected override void OnInitialized()
+    {
+        ChatState.OnChange += HandleStateChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (ChatState.SelectedRoomId != _lastRoomId)
+        {
+            _lastRoomId = ChatState.SelectedRoomId;
+            await ScrollToBottomAsync();
+        }
+
+        if (ChatState.CurrentMessages.Count != _lastMessageCount)
+        {
+            _lastMessageCount = ChatState.CurrentMessages.Count;
+            var distance = await JS.InvokeAsync<double>("rtb.scroll.distanceFromBottom", _scrollRef);
+            if (distance < 140)
+            {
+                await ScrollToBottomAsync();
+                _showJumpToLatest = false;
+            }
+            else
+            {
+                _showJumpToLatest = true;
+            }
+        }
+    }
+
+    private async Task HandleScroll()
+    {
+        var distance = await JS.InvokeAsync<double>("rtb.scroll.distanceFromBottom", _scrollRef);
+        _showJumpToLatest = distance > 140;
+        StateHasChanged();
+    }
+
+    private async Task JumpToLatest()
+    {
+        await ScrollToBottomAsync();
+        _showJumpToLatest = false;
+    }
+
+    private async Task ScrollToBottomAsync()
+    {
+        await JS.InvokeVoidAsync("rtb.scroll.toBottom", _scrollRef);
+    }
+
+    public void Dispose()
+    {
+        ChatState.OnChange -= HandleStateChanged;
+    }
+
+    private void HandleStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private static class Icons
+    {
+        public const string ArrowDown = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' width='16' height='16'><path d='M12 5v14'/><path d='m19 12-7 7-7-7'/></svg>";
+    }
+}

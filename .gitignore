@@ -1,0 +1,39 @@
+# Directorios de compilación
+bin/
+obj/
+out/
+dist/
+publish/
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Logs y cachés
+*.log
+*.cache
+*.db
+*.db-shm
+*.db-wal
+
+# Paquetes
+**/packages/
+*.nupkg
+*.nuget.props
+*.nuget.targets
+
+# Blazor WebAssembly (si aplica)
+wwwroot/_framework
+
+# Archivos temporales
+*~
+.DS_Store
+Thumbs.db   
+
+.env
+node_modules
+*/node_modules

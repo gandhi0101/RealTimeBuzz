@@ -1,0 +1,150 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject ChatStateService ChatState
+@inject ChatOptions ChatOptions
+
+<div class="@RootClasses">
+    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.18),_transparent_60%)]"></div>
+    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,_rgba(20,184,166,0.12),_transparent_45%)]"></div>
+    <div class="pointer-events-none absolute inset-0 noise-overlay"></div>
+
+    <div class="relative flex min-h-screen flex-col px-3 pb-6 pt-4 sm:px-6">
+        <header class="glass-panel flex items-center justify-between gap-4 rounded-2xl px-4 py-3 sm:px-6">
+            <div class="flex items-center gap-3">
+                <button class="glass-subtle flex h-10 w-10 items-center justify-center rounded-xl text-sm text-white/80 sm:hidden"
+                        @onclick="ToggleSidebar" aria-label="Toggle rooms">
+                    @((MarkupString)Icons.Menu)
+                </button>
+                <div>
+                    <div class="text-lg font-semibold tracking-tight">RealTimeBuzz</div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <span class="glass-subtle rounded-full px-3 py-1 text-[11px] text-white/80">
+                    You: @ChatOptions.UserId
+                </span>
+                <span class="@ConnectionClasses">
+                    <span class="h-2 w-2 rounded-full bg-current"></span>
+                    <span class="text-xs font-semibold">@ConnectionLabel</span>
+                </span>
+                <span class="glass-subtle rounded-full px-3 py-1 text-[11px] text-white/80">
+                    @(ChatState.IsMockMode ? "Mock" : "Live")
+                </span>
+
+                <button class="glass-subtle relative flex h-10 w-10 items-center justify-center rounded-xl text-white/90"
+                        @onclick="ToggleNotifications" aria-label="Notifications">
+                    @((MarkupString)Icons.Bell)
+                    @if (ChatState.GlobalUnreadCount > 0)
+                    {
+                        <span class="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-emerald-400 px-1 text-[10px] font-semibold text-slate-900">
+                            @ChatState.GlobalUnreadCount
+                        </span>
+                    }
+                </button>
+
+                <button class="glass-subtle flex h-10 w-10 items-center justify-center rounded-xl text-white/90"
+                        @onclick="ToggleSettings" aria-label="Settings">
+                    @((MarkupString)Icons.Settings)
+                </button>
+            </div>
+        </header>
+
+        <div class="mt-5 grid min-h-0 flex-1 grid-cols-1 gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
+            <SidebarRooms IsOpen="_isSidebarOpen" OnClose="CloseSidebar" />
+
+            <main class="glass-panel min-h-0 h-[calc(100dvh-7.5rem)] overflow-hidden rounded-3xl p-4 sm:p-6 lg:h-[calc(100vh-7.5rem)]">
+                @if (!string.IsNullOrWhiteSpace(ChatState.ErrorMessage) || ChatState.ConnectionStatus == ConnectionStatus.Offline)
+                {
+                    <div class="mb-4 rounded-2xl border border-rose-200/40 bg-rose-200/10 px-4 py-3 text-xs text-rose-100">
+                        <div>@(string.IsNullOrWhiteSpace(ChatState.ErrorMessage) ? "SignalR offline. Backend not reachable." : ChatState.ErrorMessage)</div>
+                        <div class="mt-1 text-[11px] text-rose-100/80">SignalR URL: @ChatStateConfig</div>
+                    </div>
+                }
+                @Body
+            </main>
+        </div>
+    </div>
+
+    <NotificationsDrawer IsOpen="_isNotificationsOpen" OnClose="CloseNotifications" />
+    <SettingsModal IsOpen="_isSettingsOpen" OnClose="CloseSettings" />
+    <ToastHost />
+</div>
+
+@code {
+    private bool _isSidebarOpen;
+    private bool _isNotificationsOpen;
+    private bool _isSettingsOpen;
+    private bool _initialized;
+
+    private string RootClasses
+        => $"relative overflow-hidden {(ChatState.Preferences.ReduceMotion ? "reduce-motion" : string.Empty)} {ThemeClass}";
+
+    private string ThemeClass => ChatState.Preferences.Theme switch
+    {
+        ThemePreference.Light => "theme-light",
+        ThemePreference.System => "theme-system",
+        _ => "theme-dark"
+    };
+
+    private string ConnectionLabel => ChatState.ConnectionStatus switch
+    {
+        ConnectionStatus.Online => "Online",
+        ConnectionStatus.Connecting => "Connecting",
+        ConnectionStatus.Reconnecting => "Reconnecting",
+        _ => "Offline"
+    };
+
+    private string ConnectionClasses => ChatState.ConnectionStatus switch
+    {
+        ConnectionStatus.Online => "accent-pill flex items-center gap-2 rounded-full px-3 py-1 text-xs",
+        ConnectionStatus.Connecting => "flex items-center gap-2 rounded-full border border-amber-200/40 bg-amber-200/10 px-3 py-1 text-xs text-amber-200",
+        ConnectionStatus.Reconnecting => "flex items-center gap-2 rounded-full border border-sky-200/40 bg-sky-200/10 px-3 py-1 text-xs text-sky-200",
+        _ => "flex items-center gap-2 rounded-full border border-rose-200/30 bg-rose-200/10 px-3 py-1 text-xs text-rose-200"
+    };
+
+    protected override void OnInitialized()
+    {
+        ChatState.OnChange += HandleStateChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_initialized)
+        {
+            _initialized = true;
+            await ChatState.InitializeAsync();
+        }
+    }
+
+    private void ToggleSidebar() => _isSidebarOpen = !_isSidebarOpen;
+
+    private void CloseSidebar() => _isSidebarOpen = false;
+
+    private void ToggleNotifications() => _isNotificationsOpen = !_isNotificationsOpen;
+
+    private void CloseNotifications() => _isNotificationsOpen = false;
+
+    private void ToggleSettings() => _isSettingsOpen = !_isSettingsOpen;
+
+    private void CloseSettings() => _isSettingsOpen = false;
+
+    private string ChatStateConfig => $"{ChatState.IsMockMode} · {ChatOptions.SignalRHubUrl}";
+
+    public void Dispose()
+    {
+        ChatState.OnChange -= HandleStateChanged;
+    }
+
+    private void HandleStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private static class Icons
+    {
+        public const string Menu = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' width='20' height='20'><line x1='3' y1='12' x2='21' y2='12'/><line x1='3' y1='6' x2='21' y2='6'/><line x1='3' y1='18' x2='21' y2='18'/></svg>";
+        public const string Bell = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' width='20' height='20'><path d='M10.3 21a1.7 1.7 0 0 0 3.4 0'/><path d='M6.7 9a5.3 5.3 0 1 1 10.6 0c0 6.2 2 7 2 7H4.7s2-.8 2-7Z'/></svg>";
+        public const string Settings = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' width='20' height='20'><path d='M12.22 2h-.44l-1.08 2.82-3.1.62-.22.4 1.52 2.63-1.52 2.63.22.4 3.1.62 1.08 2.82h.44l1.08-2.82 3.1-.62.22-.4-1.52-2.63 1.52-2.63-.22-.4-3.1-.62L12.22 2Z'/><circle cx='12' cy='12' r='3.2'/></svg>";
+    }
+}

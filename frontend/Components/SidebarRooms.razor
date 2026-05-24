@@ -1,0 +1,220 @@
+@implements IDisposable
+@inject ChatStateService ChatState
+
+<aside class="@AsideClasses">
+    <div class="glass-panel flex h-full min-h-0 flex-col gap-4 overflow-hidden rounded-3xl p-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <div class="text-sm font-semibold">Chats</div>
+                <div class="text-xs text-muted">@ChatState.Rooms.Count total</div>
+            </div>
+            <button class="glass-subtle flex h-9 w-9 items-center justify-center rounded-xl text-white/80 lg:hidden"
+                    @onclick="OnClose" aria-label="Close chats">
+                @((MarkupString)Icons.Close)
+            </button>
+        </div>
+
+        <div class="glass-input flex items-center gap-2 rounded-2xl px-3 py-2 text-sm">
+            @((MarkupString)Icons.Search)
+            <input class="w-full bg-transparent text-sm text-white/90 placeholder:text-muted focus:outline-none"
+                   placeholder="Search chats" @bind="_search" />
+        </div>
+
+        <details class="glass-subtle shrink-0 rounded-2xl px-3 py-2 text-sm">
+            <summary class="flex cursor-pointer items-center justify-between text-white/80">
+                <span class="flex items-center gap-2">
+                    @((MarkupString)Icons.UserPlus)
+                    New direct chat
+                </span>
+                <span class="text-xs text-muted">Add</span>
+            </summary>
+            <div class="mt-3 flex items-center gap-2">
+                <input class="flex-1 rounded-xl bg-white/5 px-3 py-2 text-sm text-white/90 placeholder:text-muted focus:outline-none"
+                       placeholder="email or phone" @bind="_newPeer" />
+                <button class="rounded-xl bg-emerald-400 px-3 py-2 text-[11px] font-semibold text-slate-950"
+                        @onclick="AddDirectAsync">
+                    Add
+                </button>
+            </div>
+        </details>
+
+        <div class="rtb-scroll flex-1 min-h-0 max-h-[calc(100vh-20rem)] overflow-y-auto pr-1">
+            @if (ChatState.IsLoading)
+            {
+                <div class="space-y-3">
+                    @for (var i = 0; i < 6; i++)
+                    {
+                        <div class="skeleton h-14 rounded-2xl"></div>
+                    }
+                </div>
+            }
+            else if (ChatState.Rooms.Count == 0)
+            {
+                <div class="rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-xs text-muted">
+                    No chats yet. Add a direct contact to start.
+                </div>
+            }
+            else
+            {
+                <div class="space-y-2">
+                    <div class="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">Contacts</div>
+                    @foreach (var room in FilteredRooms.Where(room => !room.IsGroup))
+                    {
+                        var isActive = room.Id == ChatState.SelectedRoomId;
+                        <button class="@(isActive ? "glass-panel ring-accent" : "glass-subtle") flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left text-sm transition"
+                                @onclick="() => SelectRoomAsync(room.Id)">
+                            <div class="flex items-center gap-3">
+                                <div class="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-200">
+                                    @room.Name[..1]
+                                    <span class="@StatusClasses(room.Status)"></span>
+                                </div>
+                                <div class="min-w-0">
+                                    <div class="truncate text-sm font-semibold">@room.Name</div>
+                                    <div class="truncate text-xs text-muted">@room.LastMessagePreview</div>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-end gap-2 text-[11px] text-muted">
+                                <span>@FormatTime(room.LastMessageAt)</span>
+                                @if (ChatState.UnreadCounts.TryGetValue(room.Id, out var unread) && unread > 0)
+                                {
+                                    <span class="flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-emerald-400 text-[11px] font-semibold text-slate-950">@unread</span>
+                                }
+                                else if (room.IsMuted)
+                                {
+                                    <span>Muted</span>
+                                }
+                            </div>
+                        </button>
+                    }
+                </div>
+
+                <div class="space-y-2">
+                    <div class="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">Groups</div>
+                    @foreach (var room in FilteredRooms.Where(room => room.IsGroup))
+                    {
+                        var isActive = room.Id == ChatState.SelectedRoomId;
+                        <button class="@(isActive ? "glass-panel ring-accent" : "glass-subtle") flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left text-sm transition"
+                                @onclick="() => SelectRoomAsync(room.Id)">
+                            <div class="flex items-center gap-3">
+                                <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-400/15 text-sky-200">
+                                    @room.Name[..1]
+                                </div>
+                                <div class="min-w-0">
+                                    <div class="truncate text-sm font-semibold">@room.Name</div>
+                                    <div class="truncate text-xs text-muted">@room.LastMessagePreview</div>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-end gap-2 text-[11px] text-muted">
+                                <span>@FormatTime(room.LastMessageAt)</span>
+                                @if (ChatState.UnreadCounts.TryGetValue(room.Id, out var unread) && unread > 0)
+                                {
+                                    <span class="flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-emerald-400 text-[11px] font-semibold text-slate-950">@unread</span>
+                                }
+                                else if (room.IsMuted)
+                                {
+                                    <span>Muted</span>
+                                }
+                            </div>
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+
+        <button class="glass-subtle flex items-center justify-center gap-2 rounded-2xl border border-dashed border-white/10 px-3 py-3 text-sm text-white/70 hover:text-white/90"
+                disabled>
+            @((MarkupString)Icons.Plus)
+            New group
+        </button>
+    </div>
+</aside>
+
+@if (IsOpen)
+{
+    <div class="fixed inset-0 z-30 bg-slate-950/60 lg:hidden" @onclick="OnClose"></div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string _search = string.Empty;
+    private string _newPeer = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        ChatState.OnChange += HandleStateChanged;
+    }
+
+    private string AsideClasses =>
+        $"fixed inset-y-0 left-0 z-40 w-72 px-3 py-4 transition-transform lg:static lg:translate-x-0 lg:sticky lg:top-5 lg:h-[calc(100vh-7.5rem)] h-full min-h-0 overflow-hidden" +
+        (IsOpen ? " translate-x-0" : " -translate-x-full");
+
+    private IEnumerable<Room> FilteredRooms =>
+        string.IsNullOrWhiteSpace(_search)
+            ? ChatState.Rooms
+            : ChatState.Rooms.Where(room => room.Name.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    private async Task SelectRoomAsync(string roomId)
+    {
+        await ChatState.SelectRoomAsync(roomId);
+        if (IsOpen)
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+
+    private async Task AddDirectAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newPeer))
+        {
+            return;
+        }
+
+        var peer = _newPeer;
+        _newPeer = string.Empty;
+        await ChatState.AddDirectRoomAsync(peer);
+        if (IsOpen)
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        ChatState.OnChange -= HandleStateChanged;
+    }
+
+    private void HandleStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private static string StatusClasses(PresenceStatus status) => status switch
+    {
+        PresenceStatus.Online => "absolute bottom-0 right-0 h-3 w-3 rounded-full border border-slate-900 bg-emerald-400",
+        PresenceStatus.Away => "absolute bottom-0 right-0 h-3 w-3 rounded-full border border-slate-900 bg-amber-300",
+        _ => "absolute bottom-0 right-0 h-3 w-3 rounded-full border border-slate-900 bg-slate-500"
+    };
+
+    private static string FormatTime(DateTimeOffset? time)
+    {
+        if (time is null)
+        {
+            return "--";
+        }
+
+        var local = time.Value.ToLocalTime();
+        return local.Date == DateTimeOffset.Now.Date
+            ? local.ToString("HH:mm")
+            : local.ToString("MMM dd");
+    }
+
+    private static class Icons
+    {
+        public const string Search = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' width='18' height='18'><circle cx='11' cy='11' r='7'/><path d='m21 21-3.6-3.6'/></svg>";
+        public const string UserPlus = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' width='18' height='18'><path d='M16 21v-2a4 4 0 0 0-4-4H6'/><circle cx='9' cy='7' r='4'/><path d='M19 8v6'/><path d='M22 11h-6'/></svg>";
+        public const string Plus = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' width='18' height='18'><path d='M12 5v14'/><path d='M5 12h14'/></svg>";
+        public const string Close = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' width='18' height='18'><path d='M18 6 6 18'/><path d='M6 6l12 12'/></svg>";
+    }
+}

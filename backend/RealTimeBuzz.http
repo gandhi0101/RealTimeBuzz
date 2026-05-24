@@ -1,0 +1,6 @@
+@RealTimeBuzz_HostAddress = http://localhost:5287
+
+GET {{RealTimeBuzz_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
