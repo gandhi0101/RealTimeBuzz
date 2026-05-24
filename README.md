@@ -1,0 +1,1 @@
+MVP: Chat web en tiempo real con notificaciones, presencia, historial y caché. Arquitectura lista para Pub/Sub (RabbitMQ/Kafka/SQS).
